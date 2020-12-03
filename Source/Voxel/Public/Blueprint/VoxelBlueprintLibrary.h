@@ -1,14 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "VoxelBlock.h"
+#include "Block/VoxelBlock.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "VoxelBlueprintLibrary.generated.h"
 
 struct FVoxelBlockType;
 
 UCLASS()
-class UVoxelBlueprintLibrary : public UBlueprintFunctionLibrary
+class VOXEL_API UVoxelBlueprintLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

@@ -1,6 +1,6 @@
 #include "VoxelSubsystem.h"
 
-#include "VoxelBlock.h"
+#include "Block/VoxelBlock.h"
 
 UVoxelSubsystem::UVoxelSubsystem(const class FObjectInitializer& ObjectInitializer)
 {

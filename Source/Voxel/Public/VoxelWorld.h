@@ -13,7 +13,7 @@ class UVoxelSubsystem;
 class IVoxelAgentInterface;
 
 USTRUCT(BlueprintType)
-struct FVoxelWorldSetting
+struct VOXEL_API FVoxelWorldSetting
 {
 	GENERATED_BODY()
 

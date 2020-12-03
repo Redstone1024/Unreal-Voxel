@@ -1,4 +1,4 @@
-#include "VoxelBlock.h"
+#include "Block/VoxelBlock.h"
 
 #include "VoxelWorld.h"
 

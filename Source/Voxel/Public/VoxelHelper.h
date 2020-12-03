@@ -8,7 +8,7 @@
 class AVoxelWorld;
 
 UCLASS()
-class UVoxelHelper : public UBlueprintFunctionLibrary
+class VOXEL_API UVoxelHelper : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
@@ -17,7 +17,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Helper", meta = (WorldContext = "WorldContextObject"))
 	static AVoxelWorld* CreateVoxelWorld(UObject* WorldContextObject, const FVoxelWorldSetting& WorldSetting);
 
-	UFUNCTION(BlueprintCallable, Category = "Voxel|Helper")
+	UFUNCTION(BlueprintPure, Category = "Voxel|Helper")
 	static void WorldToRelativeLocation(const FIntVector& InWorldLocation, FIntPoint& OutChunkLocation, FIntVector& OutRelativeLocation);
 
 };

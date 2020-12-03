@@ -1,10 +1,10 @@
 #include "VoxelWorld.h"
 
 #include "VoxelLog.h"
-#include "VoxelBlock.h"
-#include "VoxelChunk.h"
 #include "VoxelHelper.h"
 #include "VoxelSubsystem.h"
+#include "Block/VoxelBlock.h"
+#include "Chunk/VoxelChunk.h"
 #include "VoxelAgentInterface.h"
 
 const TArray<FIntPoint> ChunkLoadOrder =

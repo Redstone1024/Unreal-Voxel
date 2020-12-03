@@ -1,4 +1,4 @@
-#include "VoxelChunk.h"
+#include "Chunk/VoxelChunk.h"
 
 #include "VoxelLog.h"
 #include "VoxelWorld.h"

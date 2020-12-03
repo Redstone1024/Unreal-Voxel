@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "VoxelBlock.h"
+#include "Block/VoxelBlock.h"
 #include "GameFramework/Actor.h"
 #include "VoxelChunk.generated.h"
 

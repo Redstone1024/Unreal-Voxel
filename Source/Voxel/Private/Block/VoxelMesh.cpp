@@ -1,4 +1,4 @@
-#include "VoxelMesh.h"
+#include "Block/VoxelMesh.h"
 
 const FVoxelMeshData FVoxelMeshData::CubeTopFace =
 {

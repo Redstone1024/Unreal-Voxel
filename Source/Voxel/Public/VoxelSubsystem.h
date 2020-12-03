@@ -7,7 +7,7 @@
 struct FVoxelBlockType;
 
 UCLASS()
-class UVoxelSubsystem : public UGameInstanceSubsystem
+class VOXEL_API UVoxelSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 

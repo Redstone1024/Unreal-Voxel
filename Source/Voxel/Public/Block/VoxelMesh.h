@@ -4,7 +4,7 @@
 #include "VoxelMesh.generated.h"
 
 USTRUCT(BlueprintType)
-struct FVoxelMeshData
+struct VOXEL_API FVoxelMeshData
 {
 	GENERATED_BODY()
 
