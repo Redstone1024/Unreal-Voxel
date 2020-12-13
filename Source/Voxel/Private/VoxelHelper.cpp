@@ -1,18 +1,44 @@
 #include "VoxelHelper.h"
 
 #include "VoxelWorld.h"
+#include "Kismet/GameplayStatics.h"
 
 AVoxelWorld * UVoxelHelper::CreateVoxelWorld(UObject* WorldContextObject, const FVoxelWorldSetting& WorldSetting)
 {
+	if (!IsWorldSettingValid(WorldContextObject, WorldSetting)) return nullptr;
+
 	UWorld* World = WorldContextObject->GetWorld();
 
 	if (!World) return nullptr;
-
-	AVoxelWorld* VoxelWorld = World->SpawnActor<AVoxelWorld>();
+	
+	AVoxelWorld* VoxelWorld = Cast<AVoxelWorld>(
+		UGameplayStatics::BeginDeferredActorSpawnFromClass(
+			World,
+			AVoxelWorld::StaticClass(),
+			FTransform(),
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn,
+			nullptr
+		)
+	);
 
 	VoxelWorld->WorldSetting = WorldSetting;
 
+	UGameplayStatics::FinishSpawningActor(VoxelWorld, FTransform());
+
 	return VoxelWorld;
+}
+
+bool UVoxelHelper::IsWorldSettingValid(UObject * WorldContextObject, const FVoxelWorldSetting & WorldSetting)
+{
+	FString TestFilePath = WorldSetting.ArchiveFolder / TEXT("TestFile");
+
+	if (!FFileHelper::SaveStringToFile(TEXT(""), *TestFilePath))
+		return false;
+
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	PlatformFile.DeleteFile(*TestFilePath);
+
+	return true;
 }
 
 void UVoxelHelper::WorldToRelativeLocation(const FIntVector & InWorldLocation, FIntPoint & OutChunkLocation, FIntVector & OutRelativeLocation)

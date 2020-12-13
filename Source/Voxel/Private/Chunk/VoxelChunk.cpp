@@ -6,6 +6,24 @@
 #include "ProceduralMeshComponent.h"
 #include "KismetProceduralMeshLibrary.h"
 
+bool FVoxelChunkData::Serialize(FArchive & Slot)
+{
+	UScriptStruct* VoxelBlockStruct = FVoxelBlock::StaticStruct();
+
+	for (int32 X = 0; X < 16; ++X)
+	{
+		for (int32 Y = 0; Y < 16; ++Y)
+		{
+			for (int32 Z = 0; Z < 256; ++Z)
+			{
+				VoxelBlockStruct->SerializeItem(Slot, &Blocks[X][Y][Z], nullptr);
+			}
+		}
+	}
+
+	return true;
+}
+
 AVoxelChunk::AVoxelChunk(const class FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -24,14 +42,35 @@ AVoxelChunk::AVoxelChunk(const class FObjectInitializer& ObjectInitializer)
 
 void AVoxelChunk::BeginPlay()
 {
+	Super::BeginPlay();
+
 	UGameInstance* GameInstance = GetGameInstance();
 	VoxelSubsystem = GameInstance->GetSubsystem<UVoxelSubsystem>();
+
+	AttachToActor(GetOwner(), FAttachmentTransformRules::KeepRelativeTransform);
+	FlushMaterials();
+
+	ArchiveFile = VoxelWorld->GetWorldSetting().ArchiveFolder / FString::Printf(TEXT("%08X%08X"), ChunkLocation.X, ChunkLocation.Y);
+
+	FSaveStructLoadDelegate OnLoaded;
+	OnLoaded.BindUFunction(this, TEXT("OnDataLoaded"));
+	Data = MakeShared<FSaveStructPtr<FVoxelChunkData>>(GetGameInstance()->GetSubsystem<UAutoSaveSubsystem>(), ArchiveFile, OnLoaded);
+	
+	check(Data->IsValid());
+}
+
+void AVoxelChunk::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Data = nullptr;
+
+	Super::EndPlay(EndPlayReason);
 }
 
 const FVoxelBlock & AVoxelChunk::GetBlockByRelativeLocation(const FIntVector & Location) const
 {
 	checkCode(
-		if (!FMath::IsWithin(Location.X, 0, 16)
+		if (!Data->IsLoaded()
+			|| !FMath::IsWithin(Location.X, 0, 16)
 			|| !FMath::IsWithin(Location.Y, 0, 16)
 			|| !FMath::IsWithin(Location.Z, 0, 256))
 		{
@@ -40,13 +79,14 @@ const FVoxelBlock & AVoxelChunk::GetBlockByRelativeLocation(const FIntVector & L
 		}
 	);
 
-	return Blocks[Location.X][Location.Y][Location.Z];
+	return (*Data)->Blocks[Location.X][Location.Y][Location.Z];
 }
 
 void AVoxelChunk::SetBlockByRelativeLocation(const FIntVector& Location, const FVoxelBlock& NewBlock)
 {
 	checkCode(
-		if (!FMath::IsWithin(Location.X, 0, 16)
+		if (!Data->IsLoaded()
+			|| !FMath::IsWithin(Location.X, 0, 16)
 			|| !FMath::IsWithin(Location.Y, 0, 16)
 			|| !FMath::IsWithin(Location.Z, 0, 256))
 		{
@@ -55,7 +95,7 @@ void AVoxelChunk::SetBlockByRelativeLocation(const FIntVector& Location, const F
 		}
 	);
 
-	Blocks[Location.X][Location.Y][Location.Z] = NewBlock;
+	(*Data)->Blocks[Location.X][Location.Y][Location.Z] = NewBlock;
 
 	FlushMeshFlags |= 1 << (Location.Z / 16);
 
@@ -146,78 +186,10 @@ void AVoxelChunk::FlushMaterials()
 	}
 }
 
-void AVoxelChunk::Load()
-{
-	QUICK_SCOPE_CYCLE_COUNTER(STAT_VoxelChunk_Load);
-
-	if (VoxelWorld->GetWorldSetting().ArchiveFolder.IsEmpty())
-	{
-		ArchiveFile.Empty();
-		return;
-	}
-
-	ArchiveFile = VoxelWorld->GetWorldSetting().ArchiveFolder / FString::Printf(TEXT("%08X%08X"), ChunkLocation.X, ChunkLocation.Y) + ChunkFileExtension;
-
-	if (FPaths::FileExists(ArchiveFile))
-	{
-		TArray<uint8> ChunkDataBuffer;
-		if (FFileHelper::LoadFileToArray(ChunkDataBuffer, *ArchiveFile))
-		{
-			FMemoryReader MemoryReader(ChunkDataBuffer);
-
-			UScriptStruct* VoxelBlockStruct = FVoxelBlock::StaticStruct();
-
-			for (int32 X = 0; X < 16; ++X)
-			{
-				for (int32 Y = 0; Y < 16; ++Y)
-				{
-					for (int32 Z = 0; Z < 256; ++Z)
-					{
-						VoxelBlockStruct->SerializeItem(MemoryReader, &Blocks[X][Y][Z], nullptr);
-					}
-				}
-			}
-
-			UE_LOG(LogVoxel, Log, TEXT("Load Chunk %d, %d From File '%s'"), ChunkLocation.X, ChunkLocation.Y, *ArchiveFile);
-		}
-	}
-
-}
-
-void AVoxelChunk::Unload()
-{
-	QUICK_SCOPE_CYCLE_COUNTER(STAT_VoxelChunk_Unload);
-
-	if (ArchiveFile.IsEmpty()) return;
-
-	TArray<uint8> ChunkDataBuffer;
-	FMemoryWriter MemoryWriter(ChunkDataBuffer);
-
-	UScriptStruct* VoxelBlockStruct = FVoxelBlock::StaticStruct();
-
-	for (int32 X = 0; X < 16; ++X)
-	{
-		for (int32 Y = 0; Y < 16; ++Y)
-		{
-			for (int32 Z = 0; Z < 256; ++Z)
-			{
-				VoxelBlockStruct->SerializeItem(MemoryWriter, &Blocks[X][Y][Z], nullptr);
-			}
-		}
-	}
-
-	if (FFileHelper::SaveArrayToFile(ChunkDataBuffer, *ArchiveFile))
-	{
-		UE_LOG(LogVoxel, Log, TEXT("Save Chunk %d, %d To File '%s'"), ChunkLocation.X, ChunkLocation.Y, *ArchiveFile);
-	}
-	else
-	{
-		UE_LOG(LogVoxel, Error, TEXT("Failed To Save Chunk %d, %d To File '%s'"), ChunkLocation.X, ChunkLocation.Y, *ArchiveFile);
-	}
-}
-
 void AVoxelChunk::FlushMeshSection(int32 SectionIndex)
 {
+	if (!Data->IsLoaded()) return;
+
 	static FVoxelMeshData CubeTopFaceBuffer = FVoxelMeshData::CubeTopFace;
 	static FVoxelMeshData CubeBottomFaceBuffer = FVoxelMeshData::CubeBottomFace;
 	static FVoxelMeshData CubeFrontFaceBuffer = FVoxelMeshData::CubeFrontFace;
@@ -244,16 +216,16 @@ void AVoxelChunk::FlushMeshSection(int32 SectionIndex)
 		{
 			for (int32 Z = 0 + SectionIndex * 16; Z < 16 + SectionIndex * 16; ++Z)
 			{
-				const FVoxelBlockType& CurrentVoxelBlock = VoxelSubsystem->GetBlockType(Blocks[X][Y][Z].Type);
+				const FVoxelBlockType& CurrentVoxelBlock = VoxelSubsystem->GetBlockType((*Data)->Blocks[X][Y][Z].Type);
 
 				if (CurrentVoxelBlock.Shape != EVoxelBlockShape::Cube) continue;
 				
-				const FVoxelBlockType& TopVoxelBlock    = VoxelSubsystem->GetBlockType(Z + 1 < 256 ? Blocks[X][Y][Z + 1].Type : TEXT("Air"));
-				const FVoxelBlockType& BottomVoxelBlock = VoxelSubsystem->GetBlockType(Z - 1 >= 0 ? Blocks[X][Y][Z - 1].Type : TEXT("Air"));
-				const FVoxelBlockType& FrontVoxelBlock  = VoxelSubsystem->GetBlockType(X + 1 < 16 ? Blocks[X + 1][Y][Z].Type : (FrontChunk ? FrontChunk->GetBlockByRelativeLocation(FIntVector(0, Y, Z)).Type : TEXT("Air")));
-				const FVoxelBlockType& BackVoxelBlock   = VoxelSubsystem->GetBlockType(X - 1 >= 0 ? Blocks[X - 1][Y][Z].Type : (BackChunk  ? BackChunk->GetBlockByRelativeLocation(FIntVector(15, Y, Z)).Type : TEXT("Air")));
-				const FVoxelBlockType& LeftVoxelBlock   = VoxelSubsystem->GetBlockType(Y - 1 >= 0 ? Blocks[X][Y - 1][Z].Type : (LeftChunk  ? LeftChunk->GetBlockByRelativeLocation(FIntVector(X, 15, Z)).Type : TEXT("Air")));
-				const FVoxelBlockType& RightVoxelBlock  = VoxelSubsystem->GetBlockType(Y + 1 < 16 ? Blocks[X][Y + 1][Z].Type : (RightChunk ? RightChunk->GetBlockByRelativeLocation(FIntVector(X, 0, Z)).Type : TEXT("Air")));
+				const FVoxelBlockType& TopVoxelBlock    = VoxelSubsystem->GetBlockType(Z + 1 < 256 ? (*Data)->Blocks[X][Y][Z + 1].Type : TEXT("Air"));
+				const FVoxelBlockType& BottomVoxelBlock = VoxelSubsystem->GetBlockType(Z - 1 >= 0 ? (*Data)->Blocks[X][Y][Z - 1].Type : TEXT("Air"));
+				const FVoxelBlockType& FrontVoxelBlock  = VoxelSubsystem->GetBlockType(X + 1 < 16 ? (*Data)->Blocks[X + 1][Y][Z].Type : (FrontChunk ? FrontChunk->GetBlockByRelativeLocation(FIntVector(0, Y, Z)).Type : TEXT("Air")));
+				const FVoxelBlockType& BackVoxelBlock   = VoxelSubsystem->GetBlockType(X - 1 >= 0 ? (*Data)->Blocks[X - 1][Y][Z].Type : (BackChunk  ? BackChunk->GetBlockByRelativeLocation(FIntVector(15, Y, Z)).Type : TEXT("Air")));
+				const FVoxelBlockType& LeftVoxelBlock   = VoxelSubsystem->GetBlockType(Y - 1 >= 0 ? (*Data)->Blocks[X][Y - 1][Z].Type : (LeftChunk  ? LeftChunk->GetBlockByRelativeLocation(FIntVector(X, 15, Z)).Type : TEXT("Air")));
+				const FVoxelBlockType& RightVoxelBlock  = VoxelSubsystem->GetBlockType(Y + 1 < 16 ? (*Data)->Blocks[X][Y + 1][Z].Type : (RightChunk ? RightChunk->GetBlockByRelativeLocation(FIntVector(X, 0, Z)).Type : TEXT("Air")));
 				
 				if (TopVoxelBlock.Shape != EVoxelBlockShape::Cube)
 				{
@@ -320,4 +292,9 @@ void AVoxelChunk::FlushMeshSection(int32 SectionIndex)
 		TArray<FProcMeshTangent>(),
 		true
 	);
+}
+
+void AVoxelChunk::OnDataLoaded(const FString & Filename)
+{
+	VoxelWorld->AddChunkToMeshFlushBuffer(ChunkLocation);
 }

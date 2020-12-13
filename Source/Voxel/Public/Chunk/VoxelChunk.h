@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SaveStruct.h"
 #include "Block/VoxelBlock.h"
 #include "GameFramework/Actor.h"
 #include "VoxelChunk.generated.h"
@@ -9,7 +10,24 @@ class AVoxelWorld;
 class UVoxelSubsystem;
 class UProceduralMeshComponent;
 
-const FString ChunkFileExtension = TEXT(".voxelchunk");
+USTRUCT()
+struct FVoxelChunkData : public FSaveStruct
+{
+	GENERATED_BODY()
+
+	FVoxelBlock Blocks[16][16][256];
+
+	bool Serialize(FArchive& Slot);
+};
+
+template<>
+struct TStructOpsTypeTraits<FVoxelChunkData> : public TStructOpsTypeTraitsBase2<FVoxelChunkData>
+{
+	enum
+	{
+		WithSerializer = true,
+	};
+};
 
 UCLASS(BlueprintType)
 class VOXEL_API AVoxelChunk : public AActor
@@ -23,6 +41,8 @@ public:
 	AVoxelChunk(const class FObjectInitializer& ObjectInitializer);
 
 	virtual void BeginPlay() override;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Chunk")
 	AVoxelWorld* GetVoxelWorld() const { return VoxelWorld; }
@@ -59,16 +79,15 @@ private:
 
 	uint16 FlushMeshFlags;
 
-	FVoxelBlock Blocks[16][16][256];
+	TSharedPtr<FSaveStructPtr<FVoxelChunkData>> Data;
 
 	FVoxelMeshData MeshSectionBuffer;
 
 private:
 
-	void Load();
-
-	void Unload();
-
 	void FlushMeshSection(int32 SectionIndex);
+
+	UFUNCTION()
+	void OnDataLoaded(const FString& Filename);
 
 };

@@ -6,6 +6,7 @@
 #include "Block/VoxelBlock.h"
 #include "Chunk/VoxelChunk.h"
 #include "VoxelAgentInterface.h"
+#include "Kismet/GameplayStatics.h"
 
 const TArray<FIntPoint> ChunkLoadOrder =
 { 
@@ -160,6 +161,10 @@ void AVoxelWorld::BeginPlay()
 
 	UGameInstance* GameInstance = GetGameInstance();
 	VoxelSubsystem = GameInstance->GetSubsystem<UVoxelSubsystem>();
+
+	Data = MakeShared<FSaveStructPtr<FVoxelWorldData>>(GetGameInstance()->GetSubsystem<UAutoSaveSubsystem>(), WorldSetting.ArchiveFolder / TEXT("VoxelWorld"));
+
+	check(Data->IsValid());
 }
 
 void AVoxelWorld::Tick(float DeltaSeconds)
@@ -169,7 +174,6 @@ void AVoxelWorld::Tick(float DeltaSeconds)
 	ManageChunk();
 
 	FlushMeshs();
-
 }
 
 void AVoxelWorld::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -179,6 +183,8 @@ void AVoxelWorld::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	for (const FIntPoint& Chunk : ChunksToUnload)
 		UnloadChunk(Chunk);
+
+	Data = nullptr;
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -223,14 +229,22 @@ void AVoxelWorld::LoadChunk(const FIntPoint & ChunkLocation)
 
 	check(World);
 
-	AVoxelChunk* NewVoxelChunk = World->SpawnActor<AVoxelChunk>();
+	FTransform ChunkTransform(FVector(ChunkLocation.X * 1600.0f, ChunkLocation.Y * 1600.0f, 0.0f));
+
+	AVoxelChunk* NewVoxelChunk = Cast<AVoxelChunk>(
+		UGameplayStatics::BeginDeferredActorSpawnFromClass(
+			this, 
+			AVoxelChunk::StaticClass(),
+			ChunkTransform,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn,
+			this
+		)
+	);
+
 	NewVoxelChunk->VoxelWorld = this;
 	NewVoxelChunk->ChunkLocation = ChunkLocation;
-	NewVoxelChunk->SetActorLocation(FVector(ChunkLocation.X * 1600.0f, ChunkLocation.Y * 1600.0f, 0.0f));
-	NewVoxelChunk->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);
-	NewVoxelChunk->FlushMaterials();
-	NewVoxelChunk->Load();
-	AddChunkToMeshFlushBuffer(ChunkLocation);
+
+	UGameplayStatics::FinishSpawningActor(NewVoxelChunk, ChunkTransform);
 
 	Chunks.Add(ChunkLocation, NewVoxelChunk);
 
@@ -241,7 +255,6 @@ void AVoxelWorld::UnloadChunk(const FIntPoint & ChunkLocation)
 {
 	if (!Chunks.Contains(ChunkLocation)) return;
 
-	Chunks[ChunkLocation]->Unload();
 	Chunks[ChunkLocation]->Destroy();
 
 	Chunks.Remove(ChunkLocation);
@@ -259,9 +272,16 @@ void AVoxelWorld::FlushMaterials()
 
 void AVoxelWorld::ManageChunk()
 {
-	FIntPoint RootChunk;
-	FIntVector RLocation;
-	UVoxelHelper::WorldToRelativeLocation(IVoxelAgentInterface::Execute_GetAgentLocation(CenterAgent.GetObject()), RootChunk, RLocation);
+	if (GetGameInstance()->GetSubsystem<UAutoSaveSubsystem>()->GetIdleThreadNum() <= 0) return;
+	
+	FIntPoint RootChunk = FIntPoint(0, 0);
+
+	if (CenterAgent.GetObject())
+	{
+		FIntVector RLocation;
+		UVoxelHelper::WorldToRelativeLocation(IVoxelAgentInterface::Execute_GetAgentLocation(CenterAgent.GetObject()), RootChunk, RLocation);
+	}
+
 
 	// Load
 	for (const FIntPoint& Chunk : ChunkLoadOrder)
@@ -286,7 +306,7 @@ void AVoxelWorld::ManageChunk()
 		const FIntPoint WorldLocation = Chunk.Key;
 		const FIntPoint RelativeLocation = WorldLocation - RootChunk;
 
-		const bool bInUnloadDistance = FMath::Abs(RelativeLocation.X) > ChunkUnloadDistance && FMath::Abs(RelativeLocation.Y) > ChunkUnloadDistance;
+		const bool bInUnloadDistance = FMath::Abs(RelativeLocation.X) > ChunkUnloadDistance || FMath::Abs(RelativeLocation.Y) > ChunkUnloadDistance;
 
 		if (bInUnloadDistance)
 		{

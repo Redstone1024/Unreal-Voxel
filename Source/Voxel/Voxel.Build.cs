@@ -39,6 +39,7 @@ public class Voxel : ModuleRules
 				"Slate",
 				"SlateCore",
                 "ProceduralMeshComponent",
+                "AutoSave",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

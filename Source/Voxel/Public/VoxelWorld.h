@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SaveStruct.h"
 #include "GameFramework/Info.h"
 #include "VoxelWorld.generated.h"
 
@@ -20,6 +21,12 @@ struct VOXEL_API FVoxelWorldSetting
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel|World")
 	FString ArchiveFolder;
 
+};
+
+USTRUCT()
+struct FVoxelWorldData : public FSaveStruct
+{
+	GENERATED_BODY()
 };
 
 UCLASS(BlueprintType)
@@ -79,10 +86,14 @@ private:
 	UPROPERTY()
 	TSet<FIntPoint> MeshFlushBuffer;
 
+	TSharedPtr<FSaveStructPtr<FVoxelWorldData>> Data;
+
 private:
 	
 	void ManageChunk();
 
 	void FlushMeshs();
+
+	bool TestWorldSettingValid();
 
 };
